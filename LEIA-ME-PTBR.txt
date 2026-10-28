@@ -1,0 +1,29 @@
+ESCAPE ROOMS — PROJETO PARA GERAR APK ANDROID
+
+Este ZIP contém o código-fonte de um aplicativo Android que abre o jogo HTML localmente dentro de um WebView. Ele NÃO contém um APK pronto.
+
+O que o app faz:
+- Nome: Escape Rooms
+- Abre o jogo que está em app/src/main/assets/index.html
+- Usa WebViewAssetLoader para servir o HTML em uma origem HTTPS local compatível com módulos JavaScript
+- Precisa de internet para baixar a biblioteca Three.js do jsDelivr
+- Compilação automática configurada por GitHub Actions
+
+COMO GERAR O APK PELO GITHUB (pode ser feito no navegador do celular, mas é mais fácil em computador):
+1. Entre em https://github.com e crie uma conta ou entre na sua conta.
+2. Crie um repositório novo, por exemplo: escape-rooms-android. Deixe-o Public se quiser facilitar a partilha do projeto; não coloque informações pessoais.
+3. Envie TODOS os arquivos e pastas deste projeto para o repositório, preservando a estrutura. Não envie só este ZIP.
+4. Faça commit dos arquivos na branch main.
+5. Abra a aba Actions e espere a execução "Build Escape Rooms APK" terminar com sucesso.
+6. Abra a execução concluída e baixe o artefato "Escape-Rooms-APK". Dentro do ZIP estará app-debug.apk.
+
+COMO CRIAR UM LINK PÚBLICO PARA O YOUTUBE:
+1. No repositório, abra Releases e crie uma nova release.
+2. Use a tag v1.0.0 e publique. O workflow vai compilar o APK e anexá-lo à release automaticamente.
+3. Copie o link da página da release e coloque-o na descrição do vídeo.
+
+IMPORTANTE:
+- O primeiro APK é um APK de depuração (debug), sem assinatura de lançamento própria. Android pode mostrar um aviso ao instalar apps fora da Play Store. Compartilhe somente com pessoas que confiam na origem.
+- Para publicar na Google Play, é necessário preparar uma versão de lançamento assinada e cumprir as políticas da loja.
+- Teste o APK no seu próprio celular antes de divulgar o link.
+- A build pode falhar se o Android SDK/Gradle plugin ou as dependências externas mudarem; confira a mensagem na aba Actions.

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Escape Rooms: O Mundo das Portas</title>
+<style>
+*{box-sizing:border-box}body{margin:0;overflow:hidden;background:#101525;font-family:system-ui,Arial;color:white;touch-action:none}
+#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 3px #000}
+#top{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.pill{background:#101525d9;border:2px solid #ffffff30;border-radius:14px;padding:8px 12px;font-weight:700;font-size:13px}
+#message{position:absolute;top:22%;left:50%;transform:translateX(-50%);max-width:88%;background:#101525e8;border:2px solid #7ce7ff;border-radius:16px;padding:12px 16px;text-align:center;font-weight:700;display:none}
+#cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:26px;color:white}
+#hint{position:absolute;bottom:19%;left:50%;transform:translateX(-50%);background:#101525c9;padding:8px 12px;border-radius:12px;font-size:13px;white-space:nowrap}
+#controls{position:fixed;inset:auto 0 0 0;height:190px;pointer-events:none}
+#stick{position:absolute;left:20px;bottom:24px;width:124px;height:124px;border-radius:50%;background:#ffffff20;border:2px solid #ffffff60;pointer-events:auto;touch-action:none}
+#nub{position:absolute;left:34px;top:34px;width:52px;height:52px;border-radius:50%;background:#c8f6ffb8;border:2px solid white}
+#buttons{position:absolute;right:16px;bottom:26px;display:flex;flex-direction:column;gap:10px;pointer-events:auto}
+button{border:2px solid #ffffff8a;background:#1b2b49e8;color:white;border-radius:16px;padding:14px 16px;font-size:14px;font-weight:800;box-shadow:0 4px 0 #080d19}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 #080d19}
+#start{position:fixed;inset:0;background:linear-gradient(#0c1630dd,#11182beF),radial-gradient(circle at 50% 20%,#31bde9,#111827);display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
+.panel{max-width:440px;background:#111c33;border:2px solid #71e7ff;border-radius:24px;padding:26px;box-shadow:0 0 50px #27bde655}
+h1{line-height:1.05;margin:0 0 10px;font-size:34px;color:#8ff0ff}p{line-height:1.5;color:#d8e5ff}
+#start button{background:#19a8c9;color:#071426;border:0;font-size:18px;padding:14px 24px}
+#prompt{position:fixed;left:50%;top:62%;transform:translateX(-50%);display:none;background:#f6d75b;color:#172033;border-radius:14px;padding:12px 16px;font-weight:900;pointer-events:auto}
+@media(min-width:800px){#controls{opacity:.7}#hint{bottom:25px}}
+</style>
+</head>
+<body>
+<div id="hud"><div id="top"><div class="pill" id="room">SALA 1/3 · LABORATÓRIO</div><div class="pill" id="inventory">🎒 Inventário: vazio</div></div><div id="cross">+</div><div id="message"></div><div id="hint">Use o controle para andar e toque em INTERAGIR olhando para objetos.</div></div>
+<div id="controls"><div id="stick"><div id="nub"></div></div><div id="buttons"><button id="interact">INTERAGIR</button><button id="jump">PULAR</button></div></div>
+<div id="prompt"></div>
+<div id="start"><div class="panel"><h1>ESCAPE ROOMS</h1><p><b>O MUNDO DAS PORTAS</b><br>Explore 6 salas 3D, encontre pistas, enfrente uma fábrica de robôs e derrote o guardião da dimensão!</p><p>🎮 Controles: joystick para andar · arraste o lado direito para olhar · INTERAGIR para examinar.</p><button id="play">JOGAR</button></div></div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x91d8f5); scene.fog=new THREE.Fog(0x91d8f5,12,35);
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,100);camera.position.set(0,1.65,5);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;document.body.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xdff6ff,0x4c3859,2.0));const sun=new THREE.DirectionalLight(0xfff0c4,2.5);sun.position.set(-4,8,5);sun.castShadow=true;scene.add(sun);
+const mat=(c,r=.8,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+const mats={floor:mat(0x4b6681),wall:mat(0xe8e5d7),blue:mat(0x1e83b8),yellow:mat(0xffd34e),pink:mat(0xf08baf),dark:mat(0x263248),green:mat(0x6ee7a4),red:mat(0xf05a55),white:mat(0xffffff),purple:mat(0x9068d8),glow:new THREE.MeshStandardMaterial({color:0x57e9ff,emissive:0x19aacc,emissiveIntensity:1.5})};
+let roomIndex=0, inventory=[], solved=[false,false,false], objects=[], interactables=[], messageTimer=0, yaw=0,pitch=0,move={x:0,y:0},lookTouch=null,started=false,near=null;
+const roomNames=['LABORATÓRIO','BIBLIOTECA','NÚCLEO FINAL','CIDADE DIMENSIONAL','FÁBRICA DE ROBÔS','CHEFE FINAL'];
+function clearRoom(){for(const o of objects)scene.remove(o);objects=[];interactables=[];near=null;}
+function add(o){scene.add(o);objects.push(o);return o}
+function box(name,x,y,z,sx,sy,sz,material,interact=null){const o=add(new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),material));o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;o.userData.name=name;if(interact){o.userData.action=interact;interactables.push(o)}return o}
+function sphere(name,x,y,z,r,material,interact=null){const o=add(new THREE.Mesh(new THREE.SphereGeometry(r,20,16),material));o.position.set(x,y,z);o.castShadow=true;o.userData.name=name;if(interact){o.userData.action=interact;interactables.push(o)}return o}
+function textLabel(str,x,y,z,color='#ffffff'){const c=document.createElement('canvas');c.width=512;c.height=128;const ctx=c.getContext('2d');ctx.fillStyle='#17233be8';ctx.fillRect(0,0,512,128);ctx.strokeStyle='#8ff0ff';ctx.lineWidth=8;ctx.strokeRect(4,4,504,120);ctx.font='bold 42px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=color;ctx.fillText(str,256,64);const tex=new THREE.CanvasTexture(c);const o=add(new THREE.Mesh(new THREE.PlaneGeometry(3,0.75),new THREE.MeshBasicMaterial({map:tex,transparent:true})));o.position.set(x,y,z);return o}
+function shell(color=0xe8e5d7){scene.background=new THREE.Color(color);scene.fog.color.set(color);box('floor',0,-.2,0,12,.4,14,mat(color===0x202a46?0x303b58:0x6b8194));box('back wall',0,2,-7,12,4,.3,mat(color));box('left wall',-6,2,0,.3,4,14,mat(color));box('right wall',6,2,0,.3,4,14,mat(color));box('ceiling',0,4,0,12,.2,14,mat(0x293b56));}
+function door(x,z,label,action){box('door frame',x,1.5,z,2.2,3,.25,mats.dark);const d=box(label,x,1.45,z-.12,1.65,2.55,.18,mats.blue,action);box('door light',x,2.9,z-.24,.5,.08,.06,mats.glow);return d}
+function setRoom(n){clearRoom();roomIndex=n;camera.position.set(0,1.65,5);yaw=0;pitch=0;
+ if(n===0){shell(0xe6f3f7);box('workbench',-2,.55,-2,2,.9,1,mats.blue);box('screen',-2,1.5,-2.3,1.2,.7,.12,mats.dark);textLabel('PISTA: 2 - 4 - 1',-2,2.2,-2.2,'#ffe47a');box('battery',1,.35,-1, .6,.7,.6,mats.yellow,()=>{if(!inventory.includes('Bateria')){inventory.push('Bateria');updateInv();say('Você pegou uma bateria! Use-a no painel ao lado da porta.')}else say('A bateria já está no inventário.');});box('panel',2,1.4,-4,.8,1.2,.18,mats.dark,()=>{if(inventory.includes('Bateria')){solved[0]=true;updateInv();say('Energia restaurada! A porta da biblioteca abriu.');door(0,-6,'PORTA PARA A BIBLIOTECA',()=>setRoom(1));}else say('O painel está sem energia. Procure uma bateria amarela.');});door(0,-6,'PORTA DE SAÍDA',()=>{if(solved[0])setRoom(1);else say('A porta está trancada. Restaure a energia no painel!')});sphere('orb',-3,1,-4,.35,mats.pink,()=>say('Uma esfera com símbolos: azul, amarelo, rosa. Talvez seja importante mais tarde.'));textLabel('LABORATÓRIO',0,3,-6.6);
+ } else if(n===1){shell(0xf4dfc7);for(let i=0;i<5;i++){box('estante',-4+i*2,1.5,-3,1.3,2.6,.35,i%2?mats.pink:mats.blue);for(let j=0;j<3;j++)box('livro',-4+i*2,0.6+j*.65,-2.78,.75,.45,.12,[mats.yellow,mats.green,mats.purple][(i+j)%3]);}
+ box('book clue',-2,1,-1,.8,.8,.4,mats.yellow,()=>say('Os livros mostram cores: AZUL, AMARELO, ROSA. Toque nos três símbolos nessa ordem!'));
+ sphere('símbolo azul',-2,1.2,-4,.35,mats.blue,()=>{if(!inventory.includes('Azul')){inventory.push('Azul');updateInv();say('Símbolo azul registrado.');}else say('Azul já registrado.');});
+ sphere('símbolo amarelo',0,1.2,-4,.35,mats.yellow,()=>{if(inventory.includes('Azul')&&!inventory.includes('Amarelo')){inventory.push('Amarelo');updateInv();say('Símbolo amarelo registrado.');}else say('A ordem importa: azul primeiro!');});
+ sphere('símbolo rosa',2,1.2,-4,.35,mats.pink,()=>{if(inventory.includes('Azul')&&inventory.includes('Amarelo')){solved[1]=true;inventory.push('Chave antiga');updateInv();say('Enigma resolvido! Você encontrou a chave antiga.');}else say('Descubra a sequência de cores nos livros.');});
+ door(0,-6,'PORTA DO NÚCLEO',()=>{if(solved[1])setRoom(2);else say('A porta precisa da chave antiga. Resolva o enigma das cores!')});textLabel('A ORDEM É A CHAVE',0,3,-6.6,'#ffe47a');
+ } else if(n===2){shell(0x202a46);scene.background.set(0x202a46);scene.fog.color.set(0x202a46);box('central machine',0,1.4,-2,2.2,2.6,1.2,mats.purple);for(let i=0;i<4;i++){const a=i*Math.PI/2;sphere('energy orb',Math.cos(a)*2.2,1.4,-2+Math.sin(a)*1.4,.32,[mats.red,mats.green,mats.yellow,mats.glow][i],()=>{if(!inventory.includes('Núcleo')){inventory.push('Núcleo');updateInv();say('Você coletou energia do núcleo!');}else say('O núcleo já está carregado.');});}
+ box('final console',0,1,-4.4,1.3,1.3,.25,mats.dark,()=>{if(inventory.includes('Núcleo')){solved[2]=true;say('PORTAL ATIVADO! Vá até o portal para descobrir o que existe do outro lado!');}else say('O portal precisa de energia. Colete uma esfera brilhante.');});
+ door(0,-6,'PORTAL DIMENSIONAL',()=>{if(solved[2])setRoom(3);else say('Ative o console com a energia do núcleo.');});textLabel('O PORTAL NÃO ERA A SAÍDA...',0,3,-6.6,'#8ff0ff');
+ } else if(n===3){shell(0x9b8be8);scene.background.set(0x9b8be8);scene.fog.color.set(0x9b8be8);
+ box('floating platform',0,-.05,-2,4,.25,4,mats.purple);for(let i=0;i<5;i++){const x=-4+i*2;box('crystal tower',x,.8,-3,.7,1.6,.7,[mats.blue,mats.pink,mats.green][i%3]);}
+ textLabel('CIDADE ENTRE DIMENSÕES',0,3,-6.6,'#ffe47a');sphere('fragmento dimensional',-2,1,-2,.42,mats.glow,()=>{if(!inventory.includes('Fragmento')){inventory.push('Fragmento');updateInv();say('Fragmento dimensional coletado! Ele pode abrir o caminho para a fábrica.');}else say('Você já pegou o fragmento.');});
+ box('gateway console',2,1,-4,.9,1.4,.25,mats.dark,()=>{if(inventory.includes('Fragmento')){solved[3]=true;say('O portal da fábrica está estável! Vá até a porta.');}else say('O console precisa de um fragmento dimensional brilhante.');});door(0,-6,'PORTAL DA FÁBRICA',()=>{if(solved[3])setRoom(4);else say('Procure o fragmento dimensional na cidade.');});
+ } else if(n===4){shell(0x6d7d8b);scene.background.set(0x6d7d8b);scene.fog.color.set(0x6d7d8b);
+ for(let i=0;i<4;i++){box('robot assembly line',-3+i*2,1,-2,1.1,1.8,.8,i%2?mats.blue:mats.dark);sphere('robot eye',-3+i*2,1.5,-2.45,.13,mats.glow);box('conveyor',0,.25,-2,10,.25,1.4,mat(0x343e4c));}
+ textLabel('FÁBRICA DE ROBÔS',0,3,-6.6,'#8ff0ff');box('robot key',-2,.65,-4,.45,.9,.35,mats.yellow,()=>{if(!inventory.includes('Chave robótica')){inventory.push('Chave robótica');updateInv();say('Você encontrou a chave robótica!');}else say('A chave robótica já está com você.');});
+ box('factory console',2,1,-4,.9,1.4,.25,mats.dark,()=>{if(inventory.includes('Chave robótica')){solved[4]=true;say('A linha de montagem parou. A porta do chefe está destrancada!');}else say('Encontre a chave robótica amarela.');});door(0,-6,'PORTA DO CHEFE',()=>{if(solved[4])setRoom(5);else say('Desative a fábrica usando a chave robótica.');});
+ } else {shell(0x20202e);scene.background.set(0x20202e);scene.fog.color.set(0x20202e);
+ box('boss body',0,1.6,-3,1.5,2.4,.9,mats.dark);sphere('boss eye left',-.35,2,-3.5,.2,mats.red);sphere('boss eye right',.35,2,-3.5,.2,mats.red);textLabel('GUARDIÃO DA DIMENSÃO',0,3.3,-6.5,'#ff8b8b');
+ sphere('núcleo azul',-2,1,-2,.42,mats.glow,()=>{if(!inventory.includes('Núcleo azul')){inventory.push('Núcleo azul');updateInv();say('Você pegou o núcleo azul! O guardião ficou vulnerável.');}else say('O núcleo azul já está com você.');});
+ box('boss control',2,1,-3,.9,1.4,.25,mats.purple,()=>{if(inventory.includes('Núcleo azul')){solved[5]=true;say('O guardião foi desligado! Agora encontre a saída final.');}else say('O guardião está protegido. Pegue o núcleo azul primeiro!');});door(0,-6,'SAÍDA PARA CASA',()=>{if(solved[5]){document.getElementById('start').style.display='flex';document.querySelector('#start h1').textContent='VOCÊ ESCAPOU!';document.querySelector('#start p').innerHTML='<b>FIM DO CAPÍTULO 2</b><br>Você atravessou a cidade dimensional, sobreviveu à fábrica e derrotou o guardião!';document.getElementById('play').textContent='JOGAR DE NOVO';started=false;inventory=[];solved=[false,false,false,false,false,false];}else say('Desative o guardião usando o núcleo azul.');});
+ }
+ document.getElementById('room').textContent=`SALA ${n+1}/6 · ${roomNames[n]}`;updateInv();say(['Encontre a bateria amarela e ligue o painel.','Leia a pista na biblioteca e resolva o enigma das cores.','Colete energia e ative o portal dimensional.','Explore a cidade e encontre o fragmento dimensional.','Encontre a chave robótica e desligue a fábrica.','Pegue o núcleo azul e desligue o guardião.'][n]);
+}
+function updateInv(){document.getElementById('inventory').textContent='🎒 '+(inventory.length?'Inventário: '+inventory.join(', '):'Inventário: vazio')}
+function say(t){const e=document.getElementById('message');e.textContent=t;e.style.display='block';messageTimer=4}
+const raycaster=new THREE.Raycaster();function interact(){raycaster.setFromCamera(new THREE.Vector2(0,0),camera);const hits=raycaster.intersectObjects(interactables,false);if(hits.length&&hits[0].distance<4.5){hits[0].object.userData.action()}else say('Chegue mais perto e olhe diretamente para um objeto.')}
+document.getElementById('interact').onclick=interact;
+document.getElementById('jump').onclick=()=>{camera.position.y=2.2;setTimeout(()=>camera.position.y=1.65,350)};
+const stick=document.getElementById('stick'),nub=document.getElementById('nub');let stickId=null,stickCenter={x:0,y:0};
+stick.addEventListener('pointerdown',e=>{stickId=e.pointerId;stick.setPointerCapture(e.pointerId);const r=stick.getBoundingClientRect();stickCenter={x:r.left+r.width/2,y:r.top+r.height/2};move.x=0;move.y=0;updateStick(e)});
+stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId)updateStick(e)});
+function updateStick(e){let dx=e.clientX-stickCenter.x,dy=e.clientY-stickCenter.y;const max=42,len=Math.hypot(dx,dy);if(len>max){dx=dx/len*max;dy=dy/len*max}nub.style.left=(34+dx)+'px';nub.style.top=(34+dy)+'px';move.x=dx/max;move.y=dy/max}
+function releaseStick(e){if(e.pointerId===stickId){stickId=null;move.x=move.y=0;nub.style.left='34px';nub.style.top='34px'}}stick.addEventListener('pointerup',releaseStick);stick.addEventListener('pointercancel',releaseStick);
+let rightPointer=null,lastX=0,lastY=0;renderer.domElement.addEventListener('pointerdown',e=>{if(e.clientX>innerWidth*.42){rightPointer=e.pointerId;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId)}});
+renderer.domElement.addEventListener('pointermove',e=>{if(e.pointerId===rightPointer){yaw-=(e.clientX-lastX)*.004;pitch-=(e.clientY-lastY)*.003;pitch=Math.max(-1.15,Math.min(1.15,pitch));lastX=e.clientX;lastY=e.clientY}});
+renderer.domElement.addEventListener('pointerup',e=>{if(e.pointerId===rightPointer)rightPointer=null});
+const keys={};addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+function animate(){requestAnimationFrame(animate);if(started){camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;
+const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)),right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));let mx=move.x+(keys.d?1:0)-(keys.a?1:0),my=-move.y+(keys.w?1:0)-(keys.s?1:0);let v=forward.multiplyScalar(my*.075).add(right.multiplyScalar(mx*.075));camera.position.add(v);camera.position.x=Math.max(-5.4,Math.min(5.4,camera.position.x));camera.position.z=Math.max(-6.3,Math.min(6.3,camera.position.z));camera.position.y=1.65;
+if(messageTimer>0){messageTimer-=.016;if(messageTimer<=0)document.getElementById('message').style.display='none'}
+near=null;raycaster.setFromCamera(new THREE.Vector2(0,0),camera);const hits=raycaster.intersectObjects(interactables,false);if(hits.length&&hits[0].distance<4.5){near=hits[0].object;document.getElementById('hint').textContent='Olhe para '+(near.userData.name||'objeto')+' e toque em INTERAGIR.'}else document.getElementById('hint').textContent='Explore a sala e procure objetos brilhantes.'}
+renderer.render(scene,camera)}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+document.getElementById('play').onclick=()=>{document.getElementById('start').style.display='none';started=true;if(roomIndex===5&&solved[5]){inventory=[];solved=[false,false,false,false,false,false];}setRoom(0)};
+setRoom(0);animate();
+</script>
+</body></html>
